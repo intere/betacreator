@@ -1,0 +1,48 @@
+{
+  "name": "betacreator",
+  "version": "2.0.0",
+  "description": "A modern tool for creating rock climbing route guides and beta photos",
+  "main": "js/betacreator/Client.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "build": "make js",
+    "build:css": "make css",
+    "dev": "make js && make css",
+    "lint": "eslint js/betacreator/**/*.js",
+    "lint:fix": "eslint js/betacreator/**/*.js --fix"
+  },
+  "keywords": [
+    "rock-climbing",
+    "route-guide",
+    "beta-photos",
+    "canvas",
+    "drawing",
+    "climbing"
+  ],
+  "author": "Alma Madsen (original), Modernized by AI Assistant",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-jest": "^29.7.0",
+    "eslint": "^8.50.0",
+    "eslint-config-google": "^0.14.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": ["<rootDir>/test/setup.js"],
+    "collectCoverageFrom": [
+      "js/betacreator/**/*.js",
+      "!js/betacreator/**/*.test.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"]
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 
