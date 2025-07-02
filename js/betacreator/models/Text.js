@@ -1,17 +1,11 @@
 /**
- *  Copyright 2012 Alma Madsen
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * BetaCreator - Text Annotation Model
+ * 
+ * Represents text annotations that can be placed on climbing routes.
+ * Text elements are used for route names, difficulty ratings, beta notes, etc.
+ * 
+ * Copyright 2012 Alma Madsen
+ * Licensed under the Apache License, Version 2.0
  */
 
 goog.provide('bc.model.Text');
@@ -20,30 +14,37 @@ goog.require('bc.model.Item');
 goog.require('bc.uuid');
 
 /**
- * @param {?Object=} params
- * @param {Object=} defaults
- *
+ * Represents a text annotation element that can be placed on climbing routes.
+ * Text elements are used for route names, difficulty ratings, beta notes,
+ * warnings, and other descriptive information.
+ * 
+ * @param {?Object=} textParameters - Initial parameters for the text element
+ * @param {Object=} defaultProperties - Default properties for new text elements
  * @constructor
  * @implements {bc.model.Item}
  */
-bc.model.Text = function(params, defaults) {
-	params = params || {};
+bc.model.Text = function(textParameters, defaultProperties) {
+	textParameters = textParameters || {};
 
-	this.isText = true;
+	// Type identifier for this climbing element
+	this.isTextAnnotation = true;
 
-	this.id = bc.uuid(params.id);
+	// Unique identifier for this text element
+	this.id = bc.uuid(textParameters.id);
 
+	// Store all configurable properties
 	this.properties = {};
 	this.properties[bc.properties.ITEM_TYPE] = bc.model.ItemTypes.TEXT;
-	this.properties[bc.properties.ITEM_SCALE] = params.scale || defaults[bc.properties.ITEM_SCALE];
-	this.properties[bc.properties.ITEM_COLOR] = params.color || defaults[bc.properties.ITEM_COLOR];
-	this.properties[bc.properties.ITEM_ALPHA] = params.alpha || defaults[bc.properties.ITEM_ALPHA];
-	this.properties[bc.properties.ITEM_X] = params.x || 0;
-	this.properties[bc.properties.ITEM_Y] = params.y || 0;
-	this.properties[bc.properties.TEXT] = params.text || '';
-	this.properties[bc.properties.TEXT_ALIGN] = params.textAlign || defaults[bc.properties.TEXT_ALIGN];
-	this.properties[bc.properties.TEXT_BG] = params.textBG || defaults[bc.properties.TEXT_BG];
+	this.properties[bc.properties.ITEM_SCALE] = textParameters.scale || defaultProperties[bc.properties.ITEM_SCALE];
+	this.properties[bc.properties.ITEM_COLOR] = textParameters.color || defaultProperties[bc.properties.ITEM_COLOR];
+	this.properties[bc.properties.ITEM_ALPHA] = textParameters.alpha || defaultProperties[bc.properties.ITEM_ALPHA];
+	this.properties[bc.properties.ITEM_X] = textParameters.x || 0;
+	this.properties[bc.properties.ITEM_Y] = textParameters.y || 0;
+	this.properties[bc.properties.TEXT] = textParameters.text || '';
+	this.properties[bc.properties.TEXT_ALIGN] = textParameters.textAlign || defaultProperties[bc.properties.TEXT_ALIGN];
+	this.properties[bc.properties.TEXT_BG] = textParameters.textBG || defaultProperties[bc.properties.TEXT_BG];
 	
+	// Create getter/setter functions for all properties
 	this.type = /** @type {function(number=):number} */(bc.property.getterSetter(this.properties, bc.properties.ITEM_TYPE));
 	this.scale = /** @type {function(number=):number} */(bc.property.getterSetter(this.properties, bc.properties.ITEM_SCALE));
 	this.color = /** @type {function(string=):string} */(bc.property.getterSetter(this.properties, bc.properties.ITEM_COLOR));
@@ -54,6 +55,7 @@ bc.model.Text = function(params, defaults) {
 	this.textAlign = /** @type {function(string=):string} */(bc.property.getterSetter(this.properties, bc.properties.TEXT_ALIGN));
 	this.textBG = /** @type {function(boolean=):boolean} */(bc.property.getterSetter(this.properties, bc.properties.TEXT_BG));
 	
+	// Properties that can be modified by undo/redo actions
 	this.actionProperties = [
 		bc.properties.ITEM_SCALE,
 		bc.properties.ITEM_COLOR,
@@ -65,15 +67,18 @@ bc.model.Text = function(params, defaults) {
 		bc.properties.TEXT_BG
 	];
 
-	this.offset = new goog.math.Coordinate(0,0);
+	// Current offset for moving the text element
+	this.offset = new goog.math.Coordinate(0, 0);
 
 	/**
+	 * Bounding box for text layout and hit testing
 	 * @type {?goog.math.Coordinate}
 	 * @private
 	 */
 	this.boundingBox = null;
 
 	/**
+	 * Padding around the bounding box for hit testing
 	 * @type {number}
 	 * @private
 	 */
@@ -83,170 +88,197 @@ bc.model.Text = function(params, defaults) {
 	this.lines = [];
 };
 
-/** @typedef {{text:string, top:number, size:number, width:number, bold:boolean, italic:boolean}} */
+/** 
+ * Represents a single line of text with formatting information
+ * @typedef {{text:string, top:number, size:number, width:number, bold:boolean, italic:boolean}} 
+ */
 bc.TextLine;
 
 /**
- * Apply the offset and return the result
+ * Apply the current offset to the text element's position and return the changes.
+ * This is used when moving text elements around the canvas.
  *
- * @return {Object}
+ * @return {Object} Object containing the updated position
  */
 bc.model.Text.prototype.applyOffset = function() {
-	var ret = {};
+	var positionChanges = {};
 
-	ret[bc.properties.ITEM_X] = this.x() + this.offset.x;
-	ret[bc.properties.ITEM_Y] = this.y() + this.offset.y;
+	// Update position with current offset
+	positionChanges[bc.properties.ITEM_X] = this.x() + this.offset.x;
+	positionChanges[bc.properties.ITEM_Y] = this.y() + this.offset.y;
 	
+	// Reset the offset after applying it
 	this.offset.x = 0;
 	this.offset.y = 0;
 
-	return ret;
+	return positionChanges;
 };
 
 /**
- * Sets the size of the bounding box (x == w, y == h)
+ * Set the bounding box size for text layout and hit testing.
+ * The bounding box determines how text wraps and where it can be clicked.
  *
- * @param {goog.math.Coordinate} bbSize
- * @param {number} bbPad
+ * @param {goog.math.Coordinate} boundingBoxSize - Size of the bounding box (x == width, y == height)
+ * @param {number} boundingBoxPadding - Padding around the bounding box
  */
-bc.model.Text.prototype.setBoundingBox = function(bbSize, bbPad) {
-	this.boundingBox = bbSize;
-	this.boundingBoxPadding = bbPad;
+bc.model.Text.prototype.setBoundingBox = function(boundingBoxSize, boundingBoxPadding) {
+	this.boundingBox = boundingBoxSize;
+	this.boundingBoxPadding = boundingBoxPadding;
 };
 
 /**
- * @return {Array.<bc.TextLine>}
+ * Calculate the layout of text lines for rendering.
+ * This breaks the text into individual lines with positioning information.
+ * 
+ * @return {Array.<bc.TextLine>} Array of text lines with layout information
  */
 bc.model.Text.prototype.calculateLines = function() {
-	var defaultSize = 12,
+	var defaultFontSize = 12,
 		defaultLineSpacing = 1.5,
-		lines = goog.string.trimRight(this.text()).replace(/\n\r/g, '\n').replace(/\r/g, '\n').replace(/\t/g, '    ').split('\n'),
-		offset = 0,
-		ret = [];
+		textLines = goog.string.trimRight(this.text())
+			.replace(/\n\r/g, '\n')
+			.replace(/\r/g, '\n')
+			.replace(/\t/g, '    ')
+			.split('\n'),
+		verticalOffset = 0,
+		formattedLines = [];
 
-	goog.array.forEach(lines, function(line, i) {
-		ret.push({
-			text: line,
-			top: offset,
-			size: defaultSize,
-			width: -1,
+	// Process each line of text
+	goog.array.forEach(textLines, function(lineText, lineIndex) {
+		formattedLines.push({
+			text: lineText,
+			top: verticalOffset,
+			size: defaultFontSize,
+			width: -1, // Will be calculated during rendering
 			bold: false,
 			italic: false
 		});
 
-		offset += defaultLineSpacing*defaultSize;
+		verticalOffset += defaultLineSpacing * defaultFontSize;
 	});
 
-	return this.lines = ret;
+	return this.lines = formattedLines;
 };
 
 /**
- * @param {Object} params
- * @return {Object}
+ * Parse text element parameters from a serialized format.
+ * Used when loading route data from saved files.
+ * 
+ * @param {Object} serializedParams - Serialized text parameters
+ * @return {Object} Parsed text parameters ready for constructor
  */
-bc.model.Text.parseParams = function(params) {
-	params = params || {};
+bc.model.Text.parseParams = function(serializedParams) {
+	serializedParams = serializedParams || {};
 	
 	return {
-		type:		params[bc.properties.ITEM_TYPE],
-		scale:		params[bc.properties.ITEM_SCALE],
-		color:		params[bc.properties.ITEM_COLOR],
-		alpha:		params[bc.properties.ITEM_ALPHA],
-		x:			params[bc.properties.ITEM_X],
-		y:			params[bc.properties.ITEM_Y],
-		text:		params[bc.properties.TEXT],
-		textAlign:		params[bc.properties.TEXT_ALIGN],
-		textBG:		params[bc.properties.TEXT_BG]
+		type: serializedParams[bc.properties.ITEM_TYPE],
+		scale: serializedParams[bc.properties.ITEM_SCALE],
+		color: serializedParams[bc.properties.ITEM_COLOR],
+		alpha: serializedParams[bc.properties.ITEM_ALPHA],
+		x: serializedParams[bc.properties.ITEM_X],
+		y: serializedParams[bc.properties.ITEM_Y],
+		text: serializedParams[bc.properties.TEXT],
+		textAlign: serializedParams[bc.properties.TEXT_ALIGN],
+		textBG: serializedParams[bc.properties.TEXT_BG]
 	};
 };
 
 /**
- * Set an offset for the stamp
- * @param {goog.math.Coordinate} p
+ * Set the offset position for moving this text element.
+ * 
+ * @param {goog.math.Coordinate} offsetPosition - The offset coordinates to apply
  */
-bc.model.Text.prototype.setOffset = function(p) {
-	this.offset.x = p.x;
-	this.offset.y = p.y;
+bc.model.Text.prototype.setOffset = function(offsetPosition) {
+	this.offset.x = offsetPosition.x;
+	this.offset.y = offsetPosition.y;
 };
 
 /**
- * @return {Object}
+ * Serialize this text element's properties for saving.
+ * 
+ * @return {Object} Serialized text properties
  */
 bc.model.Text.prototype.serializeParams = function() {
-	var ret = {};
+	var serializedData = {};
 
+	// Copy all properties
 	for (var key in this.properties) {
-		ret[key] = this.properties[key];
+		serializedData[key] = this.properties[key];
 	}
 
-	return ret;
+	return serializedData;
 };
 
 /**
- * @return {Object}
+ * Get properties that can be modified by undo/redo actions.
+ * 
+ * @return {Object} Properties that can be changed
  */
 bc.model.Text.prototype.getActionParams = function() {
-	var me = this,
-		ret = {};
+	var self = this,
+		actionParams = {};
 
-	goog.array.forEach(this.actionProperties, function(key) {
-		ret[key] = me.properties[key];
+	goog.array.forEach(this.actionProperties, function(propertyKey) {
+		actionParams[propertyKey] = self.properties[propertyKey];
 	});
 
-	return ret;
+	return actionParams;
 };
 
 /**
- * @param {Object} params
+ * Set properties from an undo/redo action.
+ * 
+ * @param {Object} actionParams - Properties to update
  */
-bc.model.Text.prototype.setActionParams = function(params) {
-	var me = this;
-	goog.array.forEach(this.actionProperties, function(key) {
-		if (params[key] !== undefined)
-			me.properties[key] = params[key];
+bc.model.Text.prototype.setActionParams = function(actionParams) {
+	var self = this;
+	goog.array.forEach(this.actionProperties, function(propertyKey) {
+		if (actionParams[propertyKey] !== undefined) {
+			self.properties[propertyKey] = actionParams[propertyKey];
+		}
 	});
 };
 
 /**
- * For text we hit test agains each line so we could put other items in the white space if we want
+ * For text, we perform a hit test against each line so we could place other items in the whitespace if desired.
  *
- * @param {number} x
- * @param {number} y
- * @param {boolean=} selected
+ * @param {number} xCoordinate
+ * @param {number} yCoordinate
+ * @param {boolean=} isSelected
  * @return {boolean}
  */
-bc.model.Text.prototype.hitTest = function(x,y,selected) {
+bc.model.Text.prototype.hitTest = function(xCoordinate, yCoordinate, isSelected) {
 	if (!this.boundingBox)
 		return false;
 
-	var scale = this.scale(),
-		ta = this.textAlign(),
-		bb = new bc.math.Box(this.x(), this.y(), this.boundingBox.x*this.scale(), this.boundingBox.y*this.scale()),
-		pad = (this.textBG() || selected) ? this.boundingBoxPadding : 0;
+	var currentScale = this.scale(),
+		textAlignment = this.textAlign(),
+		boundingBox = new bc.math.Box(this.x(), this.y(), this.boundingBox.x * this.scale(), this.boundingBox.y * this.scale()),
+		padding = (this.textBG() || isSelected) ? this.boundingBoxPadding : 0;
 
-	if (ta == 'c')
-		bb.x -= bb.w/2;
-	else if (ta == 'r')
-		bb.x -= bb.w;
+	if (textAlignment == 'c')
+		boundingBox.x -= boundingBox.w / 2;
+	else if (textAlignment == 'r')
+		boundingBox.x -= boundingBox.w;
 
-	// if we are outside the bounding box (with padding), return early
-	if (Math.abs(x - bb.x - bb.w/2) > bb.w/2 + pad || Math.abs(y - bb.y - bb.h/2) > bb.h/2 + pad) {
+	// If we are outside the bounding box (with padding), return early
+	if (Math.abs(xCoordinate - boundingBox.x - boundingBox.w / 2) > boundingBox.w / 2 + padding || 
+	    Math.abs(yCoordinate - boundingBox.y - boundingBox.h / 2) > boundingBox.h / 2 + padding) {
 		return false;
 	}
 
-	// if we are in the box (which we have to be to get here) and text bg is on or the item is selected, return true.
-	if (this.textBG() || selected) {
+	// If we are in the box (which we have to be to get here) and text background is on or the item is selected, return true.
+	if (this.textBG() || isSelected) {
 		return true;
-	}
-	else {
-		var lw = 0; // line width
-		for(var i = 0, l = this.lines.length; i < l; i++) {
-			lw = this.lines[i].width*scale;
-			if( lw > -1 &&
-				x >= bb.x + (ta == 'c' ? bb.w/2 - lw/2 : (ta == 'r' ? bb.w - lw : 0)) &&
-				x <= bb.x + (ta == 'c' ? bb.w/2 + lw/2 : (ta == 'r' ? bb.w : lw)) &&
-				y >= bb.y + this.lines[i].top*scale &&
-				y <= bb.y + (i+1 < l ? this.lines[i+1].top : (this.lines[i].top + this.lines[i].size))*scale
+	} else {
+		var lineWidth = 0;
+		for (var lineIndex = 0, totalLines = this.lines.length; lineIndex < totalLines; lineIndex++) {
+			lineWidth = this.lines[lineIndex].width * currentScale;
+			if (lineWidth > -1 &&
+				xCoordinate >= boundingBox.x + (textAlignment == 'c' ? boundingBox.w / 2 - lineWidth / 2 : (textAlignment == 'r' ? boundingBox.w - lineWidth : 0)) &&
+				xCoordinate <= boundingBox.x + (textAlignment == 'c' ? boundingBox.w / 2 + lineWidth / 2 : (textAlignment == 'r' ? boundingBox.w : lineWidth)) &&
+				yCoordinate >= boundingBox.y + this.lines[lineIndex].top * currentScale &&
+				yCoordinate <= boundingBox.y + (lineIndex + 1 < totalLines ? this.lines[lineIndex + 1].top : (this.lines[lineIndex].top + this.lines[lineIndex].size)) * currentScale
 			) {
 				return true;
 			}

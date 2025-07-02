@@ -1,63 +1,75 @@
 /**
- *  Copyright 2012 Alma Madsen
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * BetaCreator - Piton Protection Element
+ * 
+ * Represents a piton placement that can be placed on routes.
+ * Pitons are traditional protection devices hammered into rock cracks.
+ * 
+ * Copyright 2012 Alma Madsen
+ * Licensed under the Apache License, Version 2.0
  */
 goog.provide('bc.model.stamp.Piton');
 
 goog.require('bc.model.Stamp');
 
 /**
- * @param {?Object=} params
- * @param {Object=} defaults
- *
+ * Represents a piton protection element.
+ * Pitons are traditional protection devices that are hammered into rock cracks.
+ * They are typically drawn as triangular or wedge-shaped symbols.
+ * 
+ * @param {?Object=} pitonParameters - Initial parameters for the piton
+ * @param {Object=} defaultProperties - Default properties for new pitons
  * @constructor
  * @extends {bc.model.Stamp}
  */
-bc.model.stamp.Piton = function(params, defaults) {
-	params = params || {};
+bc.model.stamp.Piton = function(pitonParameters, defaultProperties) {
+	pitonParameters = pitonParameters || {};
 
-	if (!params.w)
-		params.w = 12;
-	if (!params.h)
-		params.h = 12;
+	// Set default dimensions for piton symbols
+	if (!pitonParameters.w) {
+		pitonParameters.w = 12;
+	}
+	if (!pitonParameters.h) {
+		pitonParameters.h = 12;
+	}
 
-	bc.model.Stamp.call(this, params, defaults);
+	// Call the parent constructor
+	bc.model.Stamp.call(this, pitonParameters, defaultProperties);
 	
+	// Set the element type to piton
 	this.type(bc.model.ItemTypes.PITON);
 };
 goog.inherits(bc.model.stamp.Piton, bc.model.Stamp);
 
 /**
- * @param {number} x
- * @param {number} y
- * @param {boolean=} selected
- * @return {boolean}
+ * Test if a point hits this piton for selection.
+ * Pitons are drawn as triangular symbols, so we test against the triangular shape.
+ * 
+ * @param {number} testX - X coordinate to test
+ * @param {number} testY - Y coordinate to test
+ * @param {boolean=} isSelected - Whether the piton is currently selected
+ * @return {boolean} True if the point hits the piton
  */
-bc.model.stamp.Piton.prototype.hitTest = function(x,y,selected) {
-	var dist = this.lineWidth()*this.scale()/2 + 1,
-		w = this.w()*this.scale(),
-		h = this.h()*this.scale();
+bc.model.stamp.Piton.prototype.hitTest = function(testX, testY, isSelected) {
+	var hitDistance = this.lineWidth() * this.scale() / 2 + 1,
+		width = this.w() * this.scale(),
+		height = this.h() * this.scale();
 
-	// if the point is outside the bounding box return early
-	if (Math.abs(x - this.x()) > w/2 + dist || Math.abs(y - this.y()) > h/2 + dist)
+	// Quick bounding box test - if the point is outside the bounding box, return early
+	if (Math.abs(testX - this.x()) > width / 2 + hitDistance || 
+		Math.abs(testY - this.y()) > height / 2 + hitDistance) {
 		return false;
+	}
 
-	var leftEdge = this.x() - 0.1*w,
-		pBottom = this.y() + 0.1*h;
+	// Define the triangular shape of the piton
+	var leftEdge = this.x() - 0.1 * width,
+		pitonBottom = this.y() + 0.1 * height;
 
-	if (x < leftEdge - dist || (x > leftEdge + dist && y > pBottom + dist))
+	// Test if the point is within the triangular area
+	// Exclude areas outside the triangle shape
+	if (testX < leftEdge - hitDistance || 
+		(testX > leftEdge + hitDistance && testY > pitonBottom + hitDistance)) {
 		return false;
+	}
 
 	return true;
 };
