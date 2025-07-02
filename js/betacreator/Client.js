@@ -1,17 +1,11 @@
 /**
- *  Copyright 2012 Alma Madsen
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * BetaCreator - Rock Climbing Route Drawing Application
+ * 
+ * This application allows climbers to create detailed route beta by drawing lines,
+ * placing protection anchors, belay stations, and other climbing elements on photos.
+ * 
+ * Copyright 2012 Alma Madsen
+ * Licensed under the Apache License, Version 2.0
  */
 goog.provide('bc.Client');
 
@@ -28,258 +22,357 @@ goog.require('goog.string');
 goog.require('goog.pubsub.PubSub');
 
 /**
- * @param {Image} sourceImg
- * @param {?Function=} onReady
- * @param {Object=} params
- *
+ * Main client class for the BetaCreator application.
+ * Handles initialization, data loading/saving, and coordinates between GUI and canvas.
+ * 
+ * @param {Image} sourceImage - The climbing photo to draw routes on
+ * @param {?Function=} onReadyCallback - Callback function when initialization is complete
+ * @param {Object=} configuration - Configuration options for the application
  * @constructor
  */
-bc.Client = function(sourceImg, onReady, params) {
-	params = params || {};
+bc.Client = function(sourceImage, onReadyCallback, configuration) {
+	configuration = configuration || {};
 	
-	this.params = {
-		w: params['width'] || null, // null for auto
-		h: params['height'] || null, // null for auto
-		zoom: params['zoom'] || 'contain',
-		parent: params['parent'] || null, // null to replace image
-		onChange: params['onChange'] || null,
-		scaleFactor: params['scaleFactor'] || 1
+	// Application configuration with sensible defaults
+	this.configuration = {
+		width: configuration['width'] || null, // null for auto-sizing
+		height: configuration['height'] || null, // null for auto-sizing
+		zoomMode: configuration['zoom'] || 'contain', // 'contain', 'fill', or 'none'
+		parentContainer: configuration['parent'] || null, // null to replace source image
+		onChangeCallback: configuration['onChange'] || null, // Called when route data changes
+		scaleFactor: configuration['scaleFactor'] || 1 // Global scaling factor for all elements
 	};
 
-	this.defaultProperties = {};
-	this.defaultProperties[bc.properties.ITEM_SCALE] = this.params.scaleFactor;
+	// Default properties applied to new climbing elements
+	this.defaultElementProperties = {};
+	this.defaultElementProperties[bc.properties.ITEM_SCALE] = this.configuration.scaleFactor;
 
-	this.guiConfig = {
-		scaleFactor: this.params.scaleFactor
+	// GUI configuration passed to the interface
+	this.guiConfiguration = {
+		scaleFactor: this.configuration.scaleFactor
 	};
 	
-	this.minWidth = 556;
+	// Minimum width to ensure usability
+	this.minimumWidth = 556;
 
-	this.sourceImage = sourceImg;
+	// Store reference to the source climbing photo
+	this.sourceImage = sourceImage;
 
-	this.initialized = false;
+	// Track initialization state
+	this.isInitialized = false;
 
 	/**
+	 * Callbacks to execute after initialization is complete
 	 * @type {Array.<Function>}
 	 */
-	this.postInitializeCallbacks = [];
+	this.postInitializationCallbacks = [];
 
-	if (onReady) {
-		this.postInitializeCallbacks.push(onReady);
+	if (onReadyCallback) {
+		this.postInitializationCallbacks.push(onReadyCallback);
 	}
 	
-	// load the image url into a new img element and call init on completion
-	var image = goog.dom.createElement('img');
-	this.imageLoadHandle = goog.events.listen(image, goog.events.EventType.LOAD, function() {
-		this.init(image);
+	// Load the climbing photo and initialize when ready
+	var imageElement = goog.dom.createElement('img');
+	this.imageLoadEventHandle = goog.events.listen(imageElement, goog.events.EventType.LOAD, function() {
+		this.initializeApplication(imageElement);
 	}, false, this);
 
-	image.src = this.sourceImage.src;
+	imageElement.src = this.sourceImage.src;
 
-	if (this.params.onChange) {
-		bc.Client.pubsub.subscribe(bc.Client.pubsubTopics.ACTION, function() {
-			this.params.onChange();
+	// Set up change notification if callback provided
+	if (this.configuration.onChangeCallback) {
+		bc.Client.pubsub.subscribe(bc.Client.pubsubTopics.ACTION_PERFORMED, function() {
+			this.configuration.onChangeCallback();
 		}, this);
 	}
 };
 
 /**
+ * Initialize the application after the climbing photo has loaded.
+ * Sets up the canvas controller, GUI, and viewport dimensions.
+ * 
+ * @param {Image} loadedImage - The fully loaded climbing photo
  * @private
  */
-bc.Client.prototype.init = function(image) {
-	goog.events.unlistenByKey(this.imageLoadHandle);
+bc.Client.prototype.initializeApplication = function(loadedImage) {
+	goog.events.unlistenByKey(this.imageLoadEventHandle);
 	
-	this.canvasController = new bc.controller.Canvas(this, image, this.defaultProperties);
-	this.gui = new bc.GUI(this, this.guiConfig);
-
-	this.viewportWidth = this.params.w || image.width;
-	this.viewportHeight = this.params.h || image.height;
-
-	if (goog.isNumber(this.viewportWidth) && this.viewportWidth < this.minWidth)
-		this.viewportWidth = this.minWidth;
-
-	var optionbarHeight = 29;
+	// Create the main canvas controller for drawing climbing elements
+	this.canvasController = new bc.controller.Canvas(this, loadedImage, this.defaultElementProperties);
 	
+	// Create the graphical user interface
+	this.gui = new bc.GUI(this, this.guiConfiguration);
+
+	// Calculate viewport dimensions
+	this.viewportWidth = this.configuration.width || loadedImage.width;
+	this.viewportHeight = this.configuration.height || loadedImage.height;
+
+	// Ensure minimum width for usability
+	if (goog.isNumber(this.viewportWidth) && this.viewportWidth < this.minimumWidth) {
+		this.viewportWidth = this.minimumWidth;
+	}
+
+	// Height of the option bar (toolbar)
+	var optionBarHeight = 29;
+	
+	// Configure the GUI wrapper styling
 	goog.style.setStyle(this.gui.wrapper, {
 		'position': 'relative',
 		'display': (this.sourceImage.style.display == 'inherit' ? 'inline-block' : (this.sourceImage.style.display || 'inline-block')),
 		'width': goog.isNumber(this.viewportWidth) ? (this.viewportWidth + 'px') : this.viewportWidth,
-		'height': goog.isNumber(this.viewportHeight) ? ((this.viewportHeight + optionbarHeight) + 'px') : this.viewportHeight
+		'height': goog.isNumber(this.viewportHeight) ? ((this.viewportHeight + optionBarHeight) + 'px') : this.viewportHeight
 	});
 
-	if (this.params.parent)
-		goog.dom.appendChild(this.params.parent, this.gui.wrapper);
-	else
+	// Insert the application into the DOM
+	if (this.configuration.parentContainer) {
+		goog.dom.appendChild(this.configuration.parentContainer, this.gui.wrapper);
+	} else {
 		goog.dom.replaceNode(this.gui.wrapper, this.sourceImage);
+	}
 
-	if (!goog.isNumber(this.viewportWidth))
+	// Calculate actual dimensions if auto-sizing was used
+	if (!goog.isNumber(this.viewportWidth)) {
 		this.viewportWidth = goog.style.getBorderBoxSize(this.gui.wrapper).width - 2;
-	if (!goog.isNumber(this.viewportHeight))
-		this.viewportHeight = goog.style.getBorderBoxSize(this.gui.wrapper).height - optionbarHeight - 2;
+	}
+	if (!goog.isNumber(this.viewportHeight)) {
+		this.viewportHeight = goog.style.getBorderBoxSize(this.gui.wrapper).height - optionBarHeight - 2;
+	}
 
+	// Initialize the GUI
 	this.gui.init();
 
-	this.canvasController.setZoom(this.params.zoom);
+	// Set up the canvas zoom and center the view
+	this.canvasController.setZoom(this.configuration.zoomMode);
 	this.canvasController.view.centerInViewport();
 
-	this.initialized = true;
-	goog.array.forEach(this.postInitializeCallbacks, function(f) {
-		f();
+	// Mark as initialized and execute callbacks
+	this.isInitialized = true;
+	goog.array.forEach(this.postInitializationCallbacks, function(callback) {
+		callback();
 	});
-	this.postInitializeCallbacks = [];
+	this.postInitializationCallbacks = [];
 };
 
 /**
- * @param {Object} data
+ * Load climbing route data into the application.
+ * Creates climbing elements (lines, anchors, belays, etc.) from serialized data.
+ * 
+ * @param {Object} routeData - Serialized climbing route data
  * @private
  */
-bc.Client.prototype.loadData = function(data) {
-	var me = this;
+bc.Client.prototype.loadRouteData = function(routeData) {
+	var self = this;
 
+	// Clear existing climbing elements
 	this.canvasController.model.removeAllItems();
 
-	goog.array.forEach(data['items'] || [], function(itemData) {
-		var item = null;
-		switch(itemData[bc.properties.ITEM_TYPE]) {
+	// Create climbing elements from the data
+	goog.array.forEach(routeData['items'] || [], function(elementData) {
+		var climbingElement = null;
+		
+		// Create the appropriate climbing element based on type
+		switch(elementData[bc.properties.ITEM_TYPE]) {
 			case bc.model.ItemTypes.ANCHOR:
-				item = new bc.model.stamp.Anchor(bc.model.Stamp.parseParams(itemData), me.canvasController.model.properties);
+				climbingElement = new bc.model.stamp.Anchor(
+					bc.model.Stamp.parseParams(elementData), 
+					self.canvasController.model.properties
+				);
 				break;
 			case bc.model.ItemTypes.PITON:
-				item = new bc.model.stamp.Piton(bc.model.Stamp.parseParams(itemData), me.canvasController.model.properties);
+				climbingElement = new bc.model.stamp.Piton(
+					bc.model.Stamp.parseParams(elementData), 
+					self.canvasController.model.properties
+				);
 				break;
 			case bc.model.ItemTypes.RAPPEL:
-				item = new bc.model.stamp.Rappel(bc.model.Stamp.parseParams(itemData), me.canvasController.model.properties);
+				climbingElement = new bc.model.stamp.Rappel(
+					bc.model.Stamp.parseParams(elementData), 
+					self.canvasController.model.properties
+				);
 				break;
 			case bc.model.ItemTypes.BELAY:
-				item = new bc.model.stamp.Belay(bc.model.Stamp.parseParams(itemData), me.canvasController.model.properties);
+				climbingElement = new bc.model.stamp.Belay(
+					bc.model.Stamp.parseParams(elementData), 
+					self.canvasController.model.properties
+				);
 				break;
 			case bc.model.ItemTypes.LINE:
-				item = new bc.model.Line(bc.model.Line.parseParams(itemData), me.canvasController.model.properties);
+				climbingElement = new bc.model.Line(
+					bc.model.Line.parseParams(elementData), 
+					self.canvasController.model.properties
+				);
 				break;
 			case bc.model.ItemTypes.TEXT:
-				item = new bc.model.Text(bc.model.Text.parseParams(itemData), me.canvasController.model.properties);
+				climbingElement = new bc.model.Text(
+					bc.model.Text.parseParams(elementData), 
+					self.canvasController.model.properties
+				);
 				break;
 			default:
+				// Unknown element type - skip it
 				break;
 		}
 
-		if (item)
-			me.canvasController.model.addItem(item);
+		// Add the climbing element to the canvas if successfully created
+		if (climbingElement) {
+			self.canvasController.model.addItem(climbingElement);
+		}
 	});
 
+	// Trigger a canvas render to display the loaded elements
 	bc.Client.pubsub.publish(bc.Client.pubsubTopics.CANVAS_RENDER);
 };
 
 /**
- * @param {boolean=} escape
- * @return {string}
+ * Serialize the current climbing route data for saving or transmission.
+ * 
+ * @param {boolean=} escapeForHTML - Whether to escape the output for HTML embedding
+ * @return {string} JSON string containing all climbing elements
  * @private
  */
-bc.Client.prototype.getData = function(escape) {
-	var items = [];
+bc.Client.prototype.serializeRouteData = function(escapeForHTML) {
+	var climbingElements = [];
 
-	this.canvasController.model.eachItem(function(item) {
-		items.push(item.serializeParams());
+	// Collect serialized data from all climbing elements
+	this.canvasController.model.eachItem(function(climbingElement) {
+		climbingElements.push(climbingElement.serializeParams());
 	});
 
-	if (escape)
-		return goog.string.stripQuotes(goog.string.quote(goog.json.serialize({
-			'items': items
-		})), '"');
-	else
-		return goog.json.serialize({
-			'items': items
-		});
+	// Create the route data object
+	var routeData = {
+		'items': climbingElements
+	};
+
+	// Return escaped or raw JSON as requested
+	if (escapeForHTML) {
+		return goog.string.stripQuotes(goog.string.quote(goog.json.serialize(routeData)), '"');
+	} else {
+		return goog.json.serialize(routeData);
+	}
 };
 
 /**
- * @param {boolean=} includeSource
- * @param {string=} type
- * @param {?number=} width
- * @param {Image=} srcImage
- * @return {string}
+ * Generate an image of the current climbing route overlay.
+ * 
+ * @param {boolean=} includeSourceImage - Whether to include the original climbing photo
+ * @param {string=} imageFormat - Output format ('png', 'jpeg', etc.)
+ * @param {?number=} outputWidth - Width of output image (null for original size)
+ * @param {Image=} customSourceImage - Alternative source image to use
+ * @return {string} Data URL of the generated image
  * @private
  */
-bc.Client.prototype.getImage = function(includeSource, type, width, srcImage) {
-	return this.canvasController.getImage(includeSource, type, width, srcImage);
+bc.Client.prototype.generateRouteImage = function(includeSourceImage, imageFormat, outputWidth, customSourceImage) {
+	return this.canvasController.getImage(includeSourceImage, imageFormat, outputWidth, customSourceImage);
 };
 
 /**
- * @param {Image} sourceImg
- * @param {?Function=} onReady
- * @param {Object=} options
- * @return {Object}
+ * Factory function to create and configure a BetaCreator instance.
+ * This is the main entry point for the application.
+ * 
+ * @param {Image} sourceImage - The climbing photo to draw routes on
+ * @param {?Function=} onReadyCallback - Callback when initialization is complete
+ * @param {Object=} configuration - Configuration options
+ * @return {Object} Public API object with methods to interact with the application
  */
-bc.Client.go = function(sourceImg, onReady, options) {
-	var ret,
-		client = new bc.Client(sourceImg, onReady ? function() { onReady.call(ret); } : null, options),
-		onError = options['onError'] || function(er) { alert (er); };
+bc.Client.go = function(sourceImage, onReadyCallback, configuration) {
+	var publicAPI,
+		clientInstance = new bc.Client(
+			sourceImage, 
+			onReadyCallback ? function() { onReadyCallback.call(publicAPI); } : null, 
+			configuration
+		),
+		errorHandler = configuration['onError'] || function(error) { alert(error); };
 
-	ret = {
-		'loadData': function(data) {
+	// Create the public API object
+	publicAPI = {
+		/**
+		 * Load climbing route data from JSON string
+		 * @param {string} routeDataJson - JSON string containing route data
+		 */
+		'loadData': function(routeDataJson) {
 			try {
-				data = goog.json.parse(data);
-				if (!client.initialized) {
-					client.postInitializeCallbacks.push(function() {
-						client.loadData(data);
+				var parsedData = goog.json.parse(routeDataJson);
+				if (!clientInstance.isInitialized) {
+					clientInstance.postInitializationCallbacks.push(function() {
+						clientInstance.loadRouteData(parsedData);
 					});
+				} else {
+					clientInstance.loadRouteData(parsedData);
 				}
-				else {
-					client.loadData(data);
-				}
-			}
-			catch(e) {
-				onError(bc.i18n("Invalid data."));
+			} catch(parseError) {
+				errorHandler(bc.i18n("Invalid route data format."));
 			}
 		},
-		'getData': function(escape) {
+		
+		/**
+		 * Get current climbing route data as JSON string
+		 * @param {boolean=} escapeForHTML - Whether to escape for HTML embedding
+		 * @return {string} JSON string of current route data
+		 */
+		'getData': function(escapeForHTML) {
 			try {
-				return client.getData(escape);
-			}
-			catch(e) {
-				onError(bc.i18n("Editor hasn't been initialized yet, make calls in onReady callback."));
+				return clientInstance.serializeRouteData(escapeForHTML);
+			} catch(error) {
+				errorHandler(bc.i18n("Application not yet initialized. Please call this method in the onReady callback."));
 			}
 		},
-		'getImage': function(includeSource, type, width, srcImage) {
+		
+		/**
+		 * Generate an image of the current route overlay
+		 * @param {boolean=} includeSourceImage - Include original climbing photo
+		 * @param {string=} imageFormat - Output format ('png', 'jpeg')
+		 * @param {number=} outputWidth - Width of output image
+		 * @param {Image=} customSourceImage - Alternative source image
+		 * @return {string} Data URL of generated image
+		 */
+		'getImage': function(includeSourceImage, imageFormat, outputWidth, customSourceImage) {
 			try {
-				return client.getImage(includeSource, type, parseInt(width, 10) || null, srcImage);
-			}
-			catch(e) {
-				onError(bc.i18n("Editor hasn't been initialized yet, make calls in onReady callback."));
+				return clientInstance.generateRouteImage(
+					includeSourceImage, 
+					imageFormat, 
+					parseInt(outputWidth, 10) || null, 
+					customSourceImage
+				);
+			} catch(error) {
+				errorHandler(bc.i18n("Application not yet initialized. Please call this method in the onReady callback."));
 			}
 		}
 	};
 
-	return ret;
+	return publicAPI;
 };
 
 /**
+ * Global publish/subscribe system for application-wide communication
  * @type {goog.pubsub.PubSub}
  */
 bc.Client.pubsub = new goog.pubsub.PubSub();
 
 /**
+ * Application-wide event topics for pub/sub communication
  * @enum {string}
  */
 bc.Client.pubsubTopics = {
-	CANVAS_RENDER: 'cr',
-	SELECTION_CHANGE: 'sc',
-	SHOW_COLOR_PICKER: 'scp',
-	SHOW_TEXT_AREA: 'sta',
-	HIDE_OVERLAYS: 'ho',
-	MODE: 'm',
-	ACTION: 'a'
+	CANVAS_RENDER: 'canvas_render',           // Trigger canvas redraw
+	SELECTION_CHANGE: 'selection_change',     // Selection state changed
+	SHOW_COLOR_PICKER: 'show_color_picker',   // Show color picker dialog
+	SHOW_TEXT_AREA: 'show_text_area',         // Show text input dialog
+	HIDE_OVERLAYS: 'hide_overlays',           // Hide all overlay dialogs
+	MODE_CHANGE: 'mode_change',               // Drawing mode changed
+	ACTION_PERFORMED: 'action_performed'      // Undo/redo action performed
 };
 
 /**
+ * Available drawing modes for creating climbing elements
  * @enum {number}
  */
-bc.Client.modes = {
-	SELECT: 0,
-	LINE: 1,
-	STAMP: 2,
-	TEXT: 3,
-	LINE_EDIT: 4
+bc.Client.drawingModes = {
+	SELECT: 0,      // Select and edit existing elements
+	LINE: 1,        // Draw climbing route lines
+	STAMP: 2,       // Place protection anchors and gear
+	TEXT: 3,        // Add text annotations
+	LINE_EDIT: 4    // Edit existing route lines
 };
 
+// Export the main function for global access
 goog.exportSymbol('BetaCreator', bc.Client.go);

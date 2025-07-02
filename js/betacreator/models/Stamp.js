@@ -1,17 +1,11 @@
 /**
- *  Copyright 2012 Alma Madsen
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * BetaCreator - Base Protection Element Model
+ * 
+ * Base class for all climbing protection elements that can be placed on routes.
+ * This includes anchors, pitons, belay stations, and rappel points.
+ * 
+ * Copyright 2012 Alma Madsen
+ * Licensed under the Apache License, Version 2.0
  */
 
 goog.provide('bc.model.Stamp');
@@ -20,31 +14,38 @@ goog.require('bc.model.Item');
 goog.require('bc.uuid');
 
 /**
- * @param {?Object=} params
- * @param {Object=} defaults
- *
+ * Base class for all climbing protection elements (stamps).
+ * Protection elements are placed at specific points on the route to show
+ * where gear is placed, belay stations are located, etc.
+ * 
+ * @param {?Object=} elementParameters - Initial parameters for the protection element
+ * @param {Object=} defaultProperties - Default properties for new elements
  * @constructor
  * @implements {bc.model.Item}
  */
-bc.model.Stamp = function(params, defaults) {
-	params = params || {};
+bc.model.Stamp = function(elementParameters, defaultProperties) {
+	elementParameters = elementParameters || {};
 
-	this.isStamp = true;
+	// Type identifier for this climbing element
+	this.isProtectionElement = true;
 
-	this.id = bc.uuid(params.id);
+	// Unique identifier for this protection element
+	this.id = bc.uuid(elementParameters.id);
 
+	// Store all configurable properties
 	this.properties = {};
-	this.properties[bc.properties.ITEM_TYPE] = null;
-	this.properties[bc.properties.ITEM_SCALE] = params.scale || defaults[bc.properties.ITEM_SCALE];
-	this.properties[bc.properties.ITEM_COLOR] = params.color || defaults[bc.properties.ITEM_COLOR];
-	this.properties[bc.properties.ITEM_ALPHA] = params.alpha || defaults[bc.properties.ITEM_ALPHA];
-	this.properties[bc.properties.ITEM_LINEWIDTH] = params.lineWidth || 3;
-	this.properties[bc.properties.ITEM_X] = params.x || 0;
-	this.properties[bc.properties.ITEM_Y] = params.y || 0;
-	this.properties[bc.properties.ITEM_W] = params.w || 18;
-	this.properties[bc.properties.ITEM_H] = params.h || 18;
-	this.properties[bc.properties.TEXT] = params.text || '';
+	this.properties[bc.properties.ITEM_TYPE] = null; // Set by subclasses
+	this.properties[bc.properties.ITEM_SCALE] = elementParameters.scale || defaultProperties[bc.properties.ITEM_SCALE];
+	this.properties[bc.properties.ITEM_COLOR] = elementParameters.color || defaultProperties[bc.properties.ITEM_COLOR];
+	this.properties[bc.properties.ITEM_ALPHA] = elementParameters.alpha || defaultProperties[bc.properties.ITEM_ALPHA];
+	this.properties[bc.properties.ITEM_LINEWIDTH] = elementParameters.lineWidth || 3;
+	this.properties[bc.properties.ITEM_X] = elementParameters.x || 0;
+	this.properties[bc.properties.ITEM_Y] = elementParameters.y || 0;
+	this.properties[bc.properties.ITEM_W] = elementParameters.w || 18;
+	this.properties[bc.properties.ITEM_H] = elementParameters.h || 18;
+	this.properties[bc.properties.TEXT] = elementParameters.text || '';
 	
+	// Create getter/setter functions for all properties
 	this.type = /** @type {function(number=):number} */(bc.property.getterSetter(this.properties, bc.properties.ITEM_TYPE));
 	this.scale = /** @type {function(number=):number} */(bc.property.getterSetter(this.properties, bc.properties.ITEM_SCALE));
 	this.color = /** @type {function(string=):string} */(bc.property.getterSetter(this.properties, bc.properties.ITEM_COLOR));
@@ -56,6 +57,7 @@ bc.model.Stamp = function(params, defaults) {
 	this.h = /** @type {function(number=):number} */(bc.property.getterSetter(this.properties, bc.properties.ITEM_H));
 	this.text = /** @type {function(string=):string} */(bc.property.getterSetter(this.properties, bc.properties.TEXT));
 	
+	// Properties that can be modified by undo/redo actions
 	this.actionProperties = [
 		bc.properties.ITEM_SCALE,
 		bc.properties.ITEM_COLOR,
@@ -67,90 +69,106 @@ bc.model.Stamp = function(params, defaults) {
 		bc.properties.TEXT
 	];
 
-	this.offset = new goog.math.Coordinate(0,0);
+	// Current offset for moving the protection element
+	this.offset = new goog.math.Coordinate(0, 0);
 };
 
 /**
- * Apply the offset and return the result
+ * Apply the current offset to the protection element's position and return the changes.
+ * This is used when moving protection elements around the canvas.
  *
- * @return {Object}
+ * @return {Object} Object containing the updated position
  */
 bc.model.Stamp.prototype.applyOffset = function() {
-	var ret = {};
+	var positionChanges = {};
 
-	ret[bc.properties.ITEM_X] = this.x() + this.offset.x;
-	ret[bc.properties.ITEM_Y] = this.y() + this.offset.y;
+	// Update position with current offset
+	positionChanges[bc.properties.ITEM_X] = this.x() + this.offset.x;
+	positionChanges[bc.properties.ITEM_Y] = this.y() + this.offset.y;
 	
+	// Reset the offset after applying it
 	this.offset.x = 0;
 	this.offset.y = 0;
 
-	return ret;
+	return positionChanges;
 };
 
 /**
- * @param {Object} params
- * @return {Object}
+ * Parse protection element parameters from a serialized format.
+ * Used when loading route data from saved files.
+ * 
+ * @param {Object} serializedParams - Serialized element parameters
+ * @return {Object} Parsed element parameters ready for constructor
  */
-bc.model.Stamp.parseParams = function(params) {
-	params = params || {};
+bc.model.Stamp.parseParams = function(serializedParams) {
+	serializedParams = serializedParams || {};
 	
 	return {
-		type:		params[bc.properties.ITEM_TYPE],
-		scale:		params[bc.properties.ITEM_SCALE],
-		color:		params[bc.properties.ITEM_COLOR],
-		alpha:		params[bc.properties.ITEM_ALPHA],
-		lineWidth:	params[bc.properties.ITEM_LINEWIDTH],
-		x:			params[bc.properties.ITEM_X],
-		y:			params[bc.properties.ITEM_Y],
-		w:			params[bc.properties.ITEM_W],
-		h:			params[bc.properties.ITEM_H],
-		text:		params[bc.properties.TEXT]
+		type: serializedParams[bc.properties.ITEM_TYPE],
+		scale: serializedParams[bc.properties.ITEM_SCALE],
+		color: serializedParams[bc.properties.ITEM_COLOR],
+		alpha: serializedParams[bc.properties.ITEM_ALPHA],
+		lineWidth: serializedParams[bc.properties.ITEM_LINEWIDTH],
+		x: serializedParams[bc.properties.ITEM_X],
+		y: serializedParams[bc.properties.ITEM_Y],
+		w: serializedParams[bc.properties.ITEM_W],
+		h: serializedParams[bc.properties.ITEM_H],
+		text: serializedParams[bc.properties.TEXT]
 	};
 };
 
 /**
- * Set an offset for the stamp
- * @param {goog.math.Coordinate} p
+ * Set the offset position for moving this protection element.
+ * 
+ * @param {goog.math.Coordinate} offsetPosition - The offset coordinates to apply
  */
-bc.model.Stamp.prototype.setOffset = function(p) {
-	this.offset.x = p.x;
-	this.offset.y = p.y;
+bc.model.Stamp.prototype.setOffset = function(offsetPosition) {
+	this.offset.x = offsetPosition.x;
+	this.offset.y = offsetPosition.y;
 };
 
 /**
- * @return {Object}
+ * Serialize this protection element's properties for saving.
+ * 
+ * @return {Object} Serialized element properties
  */
 bc.model.Stamp.prototype.serializeParams = function() {
-	var ret = {};
+	var serializedData = {};
 
+	// Copy all properties
 	for (var key in this.properties) {
-		ret[key] = this.properties[key];
+		serializedData[key] = this.properties[key];
 	}
 
-	return ret;
+	return serializedData;
 };
 
 /**
- * @return {Object}
+ * Get properties that can be modified by undo/redo actions.
+ * 
+ * @return {Object} Properties that can be changed
  */
 bc.model.Stamp.prototype.getActionParams = function() {
-	var me = this,
-		ret = {};
+	var self = this,
+		actionParams = {};
 
-	goog.array.forEach(this.actionProperties, function(key) {
-		ret[key] = me.properties[key];
+	goog.array.forEach(this.actionProperties, function(propertyKey) {
+		actionParams[propertyKey] = self.properties[propertyKey];
 	});
 
-	return ret;
+	return actionParams;
 };
 
 /**
- * @param {Object} params
+ * Set properties from an undo/redo action.
+ * 
+ * @param {Object} actionParams - Properties to update
  */
-bc.model.Stamp.prototype.setActionParams = function(params) {
-	var me = this;
-	goog.array.forEach(this.actionProperties, function(key) {
-		if (params[key] !== undefined)
-			me.properties[key] = params[key];
+bc.model.Stamp.prototype.setActionParams = function(actionParams) {
+	var self = this;
+	goog.array.forEach(this.actionProperties, function(propertyKey) {
+		if (actionParams[propertyKey] !== undefined) {
+			self.properties[propertyKey] = actionParams[propertyKey];
+		}
 	});
 };
